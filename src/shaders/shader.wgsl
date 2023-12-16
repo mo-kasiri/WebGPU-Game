@@ -14,13 +14,8 @@ If we tell the GPU to execute this function 10 times by calling draw,
 the first time vertex_index would be 0, the 2nd time it would be 1, the 3rd time it would be 2, etc…
 */
 @vertex
-fn vertexMain(@builtin(vertex_index) vertexIndex :u32) -> @builtin(position) vec4f
+fn vertexMain(@location(0) pos: vec2f, @location(1) color: vec3f) -> VertexOut
 {
-    let pos = array(
-              vec2f( 0.0,  0.5),  // top center
-              vec2f(-0.5, -0.5),  // bottom left
-              vec2f( 0.5, -0.5)   // bottom right
-    );
 
     /*
     The vertexMain function declares an array of 3 vec2fs. Each vec2f consists of two 32-bit floating point values.
@@ -29,11 +24,12 @@ fn vertexMain(@builtin(vertex_index) vertexIndex :u32) -> @builtin(position) vec
     and since pos is an array of vec2f, the code supplies 0.0 and 1.0 for the remaining 2 values.
     */
 
-    //var output: VertexOut;
-    //output.position = vec4f(pos[vertexIndex],0.0,1.0);
-    //output.color = vec4(1.0, 0.0, 0.0, 1.0);
+    var output: VertexOut;
+    output.position = vec4f(pos,0.0,1.0);
+    output.color = vec4f(color,1.0);
+    return output;
 
-    return vec4f(pos[vertexIndex],0.0,1.0);
+    //return vec4f(pos,0.0,1.0);
 }
 
 // The shader module also declares a function called fragmentMain that is declared with @fragment attribute making it a fragment shader function.
@@ -47,7 +43,7 @@ When the GPU rasterizes the triangle (draws it with pixels), it will call the fr
 In our case, we’re just returning red.
 */
 @fragment
-fn fragmentMain() -> @location(0) vec4f
+fn fragmentMain(output: VertexOut) -> @location(0) vec4f
 {
-    return vec4f(1.0, 0.0, 0.0, 1.0);
+    return output.color;
 }
