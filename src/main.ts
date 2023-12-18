@@ -12,6 +12,7 @@ class Renderer {
     private pipeline!: GPURenderPipeline;
     private positionBuffer!: GPUBuffer;
     private colorsBuffer!: GPUBuffer;
+    private renderPassDescriptor!: GPURenderPassDescriptor;
     constructor() {}
 
     public async initialize(): Promise<void>
@@ -20,7 +21,7 @@ class Renderer {
         this.context = canvas.getContext('webgpu')!;
 
         if(!this.context){
-            alert('webgpu is not supported');
+            this.fail('need a browser that supports WebGPU');
             console.error('webgpu is not supported');
             return;
         }
@@ -111,6 +112,7 @@ class Renderer {
         }
 
         this.pipeline = this.device.createRenderPipeline({
+            label: "draw a triangle",
             vertex: vertexState,
             fragment: fragmentState,
             primitive: {
@@ -118,29 +120,7 @@ class Renderer {
             },
             layout: "auto" // We set layout to 'auto' which means to ask WebGPU to derive the layout of data from the shaders. We’re not using any data though.
         });
-    }
 
-
-    public draw()
-    {
-
-        /*
-        Data, such as vertex positions, colors, and textures, is stored in buffers and textures.
-         Buffers are used for generic data, and textures are used for image data.
-        Buffers and textures are created on the GPU and are more efficient for rendering because the data stays on the GPU,
-         (reducing the need for frequent data transfers between the CPU and GPU)
-         */
-
-        const commandEncoder = this.device.createCommandEncoder();
-
-        /*
-         * we call context.getCurrentTexture() to get a texture that will appear in the canvas.
-         * Calling createView gets a view into a specific part of a texture but with no parameters,
-         * it will return the default part which is what we want in this case.
-         * For now, our only colorAttachment is a texture view from our canvas which we get via the context we created at the start.
-         * Again, element 0 of the colorAttachments array corresponds to @location(0) as we specified for the return value of the fragment shader.
-         */
-        const textureView = this.context.getCurrentTexture().createView();
 
         //  GPURenderPassDescriptor which describes which textures we want to draw to and how to use them.
         /*
@@ -151,42 +131,90 @@ class Renderer {
         The other option is 'load' which means load the existing contents of the texture into the GPU so we can draw over what’s already there.
         storeOp: 'store' means store the result of what we draw. We could also pass 'discard' which would throw away what we draw.
          */
-        const renderPassDescriptor: GPURenderPassDescriptor = {
-           label: 'our basic canvas renderPass',
-           colorAttachments:[{
-               view: textureView,
-               clearValue:{r: 0.3, g: 0.3, b: 0.23, a: 1.0},
-               loadOp: 'clear',
-               storeOp: 'store'
-           }]
+
+        this.renderPassDescriptor = {
+            label: 'our basic canvas renderPass',
+            colorAttachments:[{
+                view: this.context.getCurrentTexture().createView(),
+
+                clearValue:{r: 0.3, g: 0.3, b: 0.23, a: 1.0},
+                loadOp: 'clear',
+                storeOp: 'store'
+            }]
         }
 
-        //  a pass encoder object on which compute/render commands are issued
-        const passEncoder = commandEncoder.beginRenderPass((renderPassDescriptor));
+        /*
+         * we call context.getCurrentTexture() to get a texture that will appear in the canvas.
+         * Calling createView gets a view into a specific part of a texture but with no parameters,
+         * it will return the default part which is what we want in this case.
+         * For now, our only colorAttachment is a texture view from our canvas which we get via the context we created at the start.
+         * Again, element 0 of the colorAttachments array corresponds to @location(0) as we specified for the return value of the fragment shader.
+         */
+        //const textureView = this.context.getCurrentTexture().createView();
+    }
 
-        passEncoder.setPipeline(this.pipeline);
+
+    public render()
+    {
+
+        /*
+        Data, such as vertex positions, colors, and textures, is stored in buffers and textures.
+        Buffers are used for generic data, and textures are used for image data.
+        Buffers and textures are created on the GPU and are more efficient for rendering because the data stays on the GPU,
+        (reducing the need for frequent data transfers between the CPU and GPU)
+         */
+
+        const commandEncoder = this.device.createCommandEncoder();
+
+        // A pass encoder object on which compute/render commands are issued
+        // A render pass encoder is a specific encoder for creating commands related to rendering.
+        // We pass it our renderPassDescriptor to tell it which texture we want to render to.
+        const renderPassEncoder = commandEncoder.beginRenderPass((this.renderPassDescriptor));
 
 
-        passEncoder.setVertexBuffer(0, this.positionBuffer);
-        passEncoder.setVertexBuffer(1, this.colorsBuffer);
-        passEncoder.draw(3); // 3 times for 3 vertices
-        passEncoder.end();
+        /*
+           We encode the command, setPipeline, to set our pipeline
+           and then tell it to execute our vertex shader 3 times by calling draw with 3
+         */
+
+        /*
+        It’s important to emphasize that all of these functions we called like setPipeline,
+        and draw only add commands to a command buffer.
+        They don’t actually execute the commands.
+        The commands are executed when we submit the command buffer to the device queue.
+         */
+        renderPassEncoder.setPipeline(this.pipeline);
+
+        renderPassEncoder.setVertexBuffer(0, this.positionBuffer);
+        renderPassEncoder.setVertexBuffer(1, this.colorsBuffer);
+        renderPassEncoder.draw(3); // 3 times for 3 vertices
+        renderPassEncoder.end();
 
         /*
         Developers use a command encoder to encode a sequence of rendering commands,
         specifying how buffers, textures, and shaders should be used.
         These commands are sent to the GPU for execution.
          */
+
+        /*
+        We end the render pass, and then finish the encoder.
+        This gives us a command buffer that represents the steps we just specified.
+        Finally, we submit the command buffer to be executed.
+         */
         const commandBuffer = commandEncoder.finish();
         this.device.queue.submit([commandBuffer]); //Submit the command buffer to the GPU via the logical device's command queue.
         //console.log('drew')
     }
-}
 
+    private fail(msg:String) {
+        // eslint-disable-next-line no-alert
+        alert(msg);
+    }
+}
 
 const renderer = new Renderer();
 renderer.initialize().then(()=>
 {
-    renderer.draw();
+    renderer.render();
 });
 
