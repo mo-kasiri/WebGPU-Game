@@ -13,12 +13,13 @@ class Renderer {
     private positionBuffer!: GPUBuffer;
     private colorsBuffer!: GPUBuffer;
     private renderPassDescriptor!: GPURenderPassDescriptor;
+    private canvas: HTMLCanvasElement =  document.getElementById('canvas') as HTMLCanvasElement;
     constructor() {}
 
     public async initialize(): Promise<void>
     {
-        const canvas = document.getElementById('canvas') as HTMLCanvasElement;
-        this.context = canvas.getContext('webgpu')!;
+
+        this.context = this.canvas.getContext('webgpu')!;
 
         if(!this.context){
             this.fail('need a browser that supports WebGPU');
@@ -134,9 +135,9 @@ class Renderer {
 
         this.renderPassDescriptor = {
             label: 'our basic canvas renderPass',
+            // @ts-ignore
             colorAttachments:[{
-                view: this.context.getCurrentTexture().createView(),
-
+                //view: this.context.getCurrentTexture().createView(),
                 clearValue:{r: 0.3, g: 0.3, b: 0.23, a: 1.0},
                 loadOp: 'clear',
                 storeOp: 'store'
@@ -156,6 +157,9 @@ class Renderer {
 
     public render()
     {
+        // @ts-ignore
+        this.renderPassDescriptor.colorAttachments[0].view =
+            this.context.getCurrentTexture().createView();
 
         /*
         Data, such as vertex positions, colors, and textures, is stored in buffers and textures.
@@ -204,6 +208,19 @@ class Renderer {
         const commandBuffer = commandEncoder.finish();
         this.device.queue.submit([commandBuffer]); //Submit the command buffer to the GPU via the logical device's command queue.
         //console.log('drew')
+
+        const observer = new ResizeObserver(entries => {
+            for(const entry of entries){
+                const canvas = entry.target;
+                const width = entry.borderBoxSize[0].inlineSize;
+                const height = entry.contentBoxSize[0].blockSize;
+                canvas.width = Math.max(1, Math.min(width, this.device.limits.maxTextureDimension2D));
+                canvas.height = Math.max(1, Math.min(height, this.device.limits.maxTextureDimension2D));
+
+                this.render();
+            }
+        });
+        observer.observe(this.canvas);
     }
 
     private fail(msg:String) {
